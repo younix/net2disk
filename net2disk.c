@@ -235,7 +235,7 @@ server(struct sockaddr_in *sin, const char *file)
 void
 usage(void)
 {
-	fputs("net2disk [-bshv] [-j jobs] [host] [port]\n", stderr);
+	fputs("net2disk [-bhsv] [-j jobs] [-t sec] [host] [port]\n", stderr);
 	exit(1);
 }
 
@@ -253,7 +253,7 @@ main(int argc, char *argv[])
 	bool			 bflag = false;
 	bool			 hflag = false;
 
-	while ((ch = getopt(argc, argv, "bhj:sv")) != -1) {
+	while ((ch = getopt(argc, argv, "bhj:st:v")) != -1) {
 		switch (ch) {
 		case 'b':
 			bflag = true;
@@ -270,6 +270,11 @@ main(int argc, char *argv[])
 			addr = "0.0.0.0";
 			file = "/dev/null";
 			sflag = true;
+			break;
+		case 't':
+			sec = atoi(optarg);
+			if (sec == 0)
+				err(1, "invalid waiting time: %s", optarg);
 			break;
 		case 'v':
 			verbosity++;

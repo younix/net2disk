@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 
 #include <err.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -38,11 +39,12 @@ usage(void)
 }
 
 void
-server(struct sockaddr_in *sin)
+server(struct sockaddr_in *sin, const char *file)
 {
 	socklen_t	slen = sizeof *sin;
 	int		s;
 	int		c;
+	int		fd;
 
 	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 		err(1, "socket");
@@ -58,6 +60,9 @@ server(struct sockaddr_in *sin)
 
 	logstr(1, sin, "connected");
 
+	if ((fd = open(file, O_WRONLY)) == -1)
+		err(1, "open: %s", file);
+
 	for (;;) {
 		char buf[BUFSIZ];
 		ssize_t size;
@@ -65,13 +70,22 @@ server(struct sockaddr_in *sin)
 		if ((size = read(c, buf, sizeof buf)) == -1)
 			err(1, "read");
 
-		if (size == 0) {
-			logstr(1, sin, "closed");
+		if (size == 0)
 			break;
-		}
 
 		logstr(2, sin, "read %zd bytes", size);
+
+		if (write(fd, buf, size) == -1)
+			err(1, "write");
 	}
+
+	if (close(fd) == -1)
+		err(1, "close");
+
+	if (close(c) == -1)
+		err(1, "close");
+
+	logstr(1, sin, "closed");
 }
 
 int
@@ -80,6 +94,7 @@ main(int argc, char *argv[])
 	struct sockaddr_in	 sin;
 	char			*addr = "127.0.0.1";
 	char			*port = "12345";
+	char			*file = "/dev/zero";
 	int			 ch;
 	bool			 sflag = false;
 
@@ -87,6 +102,7 @@ main(int argc, char *argv[])
 		switch (ch) {
 		case 's':
 			addr = "0.0.0.0";
+			file = "/dev/null";
 			sflag = true;
 			break;
 		case 'v':
@@ -116,7 +132,7 @@ main(int argc, char *argv[])
 		err(1, "invalid host %s", addr);
 
 	if (sflag)
-		server(&sin);
+		server(&sin, file);
 
 	return 0;
 }

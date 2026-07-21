@@ -239,7 +239,7 @@ server(struct sockaddr_in *sin, const char *file)
 			err(1, "write");
 	}
 
-	if (flags | O_CREAT) {
+	if (flags & O_CREAT) {
 		logstr(1, sin, "unlink file");
 
 		if (unlink(file) == -1)

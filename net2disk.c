@@ -4,11 +4,31 @@
 #include <arpa/inet.h>
 
 #include <err.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+int verbosity = 0;
+
+void
+logstr(int level, struct sockaddr_in *sin, const char *fmt, ...)
+{
+	va_list args;
+
+	if (verbosity < level)
+		return;
+
+	printf("%s:%hu ", inet_ntoa(sin->sin_addr), ntohs(sin->sin_port));
+
+	va_start(args, fmt);
+	vprintf(fmt, args);
+	va_end(args);
+
+	putchar('\n');
+}
 
 void
 usage(void)
@@ -36,8 +56,7 @@ server(struct sockaddr_in *sin)
 	if ((c = accept(s, (struct sockaddr *)sin, &slen)) == -1)
 		err(1, "accept");
 
-	printf("%s:%hu connected\n", inet_ntoa(sin->sin_addr),
-	    ntohs(sin->sin_port));
+	logstr(1, sin, "connected");
 
 	for (;;) {
 		char buf[BUFSIZ];
@@ -47,13 +66,11 @@ server(struct sockaddr_in *sin)
 			err(1, "read");
 
 		if (size == 0) {
-			printf("%s:%hu closed\n", inet_ntoa(sin->sin_addr),
-			    ntohs(sin->sin_port));
+			logstr(1, sin, "closed");
 			break;
 		}
 
-		printf("%s:%hu read %zd bytes\n", inet_ntoa(sin->sin_addr),
-		    ntohs(sin->sin_port), size);
+		logstr(2, sin, "read %zd bytes", size);
 	}
 }
 
@@ -66,11 +83,14 @@ main(int argc, char *argv[])
 	int			 ch;
 	bool			 sflag = false;
 
-	while ((ch = getopt(argc, argv, "sh")) != -1) {
+	while ((ch = getopt(argc, argv, "svh")) != -1) {
 		switch (ch) {
 		case 's':
 			addr = "0.0.0.0";
 			sflag = true;
+			break;
+		case 'v':
+			verbosity++;
 			break;
 		case 'h':
 		default:

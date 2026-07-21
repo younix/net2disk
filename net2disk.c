@@ -32,6 +32,48 @@ logstr(int level, struct sockaddr_in *sin, const char *fmt, ...)
 }
 
 void
+client(struct sockaddr_in *sin, const char *file)
+{
+	int		s;
+	int		fd;
+
+	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+		err(1, "socket");
+
+	if (connect(s, (struct sockaddr *)sin, sizeof *sin) == -1)
+		err(1, "connect");
+
+	logstr(1, sin, "connected");
+
+	if ((fd = open(file, O_RDONLY)) == -1)
+		err(1, "open: %s", file);
+
+	for (;;) {
+		char buf[BUFSIZ];
+		ssize_t size;
+
+		if ((size = read(fd, buf, sizeof buf)) == -1)
+			err(1, "read");
+
+		if (size == 0)
+			break;
+
+		logstr(2, sin, "read %zd bytes", size);
+
+		if (write(s, buf, size) == -1)
+			err(1, "write");
+	}
+
+	if (close(fd) == -1)
+		err(1, "close");
+
+	if (close(s) == -1)
+		err(1, "close");
+
+	logstr(1, sin, "closed");
+}
+
+void
 server(struct sockaddr_in *sin, const char *file)
 {
 	socklen_t	slen = sizeof *sin;
@@ -133,6 +175,8 @@ main(int argc, char *argv[])
 
 	if (sflag)
 		server(&sin, file);
+	else
+		client(&sin, file);
 
 	return 0;
 }

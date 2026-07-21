@@ -142,7 +142,7 @@ server(struct sockaddr_in *sin, const char *file)
 void
 usage(void)
 {
-	fputs("net2disk [-sh] [host] [port]\n", stderr);
+	fputs("net2disk [-shv] [host] [port]\n", stderr);
 	exit(1);
 }
 

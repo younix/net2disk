@@ -251,11 +251,15 @@ main(int argc, char *argv[])
 	int			 jobs = 1;
 	bool			 sflag = false;
 	bool			 bflag = false;
+	bool			 hflag = false;
 
-	while ((ch = getopt(argc, argv, "bj:svh")) != -1) {
+	while ((ch = getopt(argc, argv, "bhj:sv")) != -1) {
 		switch (ch) {
 		case 'b':
 			bflag = true;
+			break;
+		case 'h':
+			hflag = true;
 			break;
 		case 'j':
 			jobs = atoi(optarg);
@@ -270,7 +274,6 @@ main(int argc, char *argv[])
 		case 'v':
 			verbosity++;
 			break;
-		case 'h':
 		default:
 			usage();
 		}
@@ -296,12 +299,33 @@ main(int argc, char *argv[])
 	if (sflag)
 		server(&sin, file);
 	else {
-		ssize_t sum = client(&sin, file, jobs, sec);
+		ssize_t	factor = 1024;
+		ssize_t	sum = client(&sin, file, jobs, sec);
+		char	*unit = "";
 
-		if (bflag)
+		if (bflag) {
 			sum *= 8;
+			factor = 1000;
+		}
 
-		printf("%zd %s/s\n", sum / sec, bflag ? "bits" : "Bytes");
+		while (hflag && sum > factor*10) {
+			sum /= factor;
+
+			if (strcmp(unit, "") == 0)
+				unit = "K";
+			else if (strcmp(unit, "K") == 0)
+				unit = "M";
+			else if (strcmp(unit, "M") == 0)
+				unit = "G";
+			else if (strcmp(unit, "G") == 0)
+				unit = "T";
+			else if (strcmp(unit, "T") == 0) {
+				unit = "P";
+				break;
+			}
+		}
+
+		printf("%zd %s%s/s\n", sum / sec, unit, bflag ? "bits" : "Bytes");
 	}
 
 	return 0;

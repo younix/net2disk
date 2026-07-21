@@ -32,13 +32,6 @@ logstr(int level, struct sockaddr_in *sin, const char *fmt, ...)
 }
 
 void
-usage(void)
-{
-	fputs("net2disk [-sh] [host] [port]\n", stderr);
-	exit(1);
-}
-
-void
 server(struct sockaddr_in *sin, const char *file)
 {
 	socklen_t	slen = sizeof *sin;
@@ -86,6 +79,13 @@ server(struct sockaddr_in *sin, const char *file)
 		err(1, "close");
 
 	logstr(1, sin, "closed");
+}
+
+void
+usage(void)
+{
+	fputs("net2disk [-sh] [host] [port]\n", stderr);
+	exit(1);
 }
 
 int

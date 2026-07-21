@@ -15,12 +15,14 @@
  */
 
 #include <sys/socket.h>
+#include <sys/wait.h>
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
 #include <err.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -28,7 +30,19 @@
 #include <string.h>
 #include <unistd.h>
 
+#define nitems(_a)	(sizeof((_a)) / sizeof((_a)[0]))
+#define READ	0
+#define WRITE	1
+
 int verbosity = 0;
+bool loop = true;
+
+void
+sighandler(int sig)
+{
+	if (sig == SIGALRM)
+		loop = false;
+}
 
 void
 logstr(int level, struct sockaddr_in *sin, const char *fmt, ...)
@@ -48,21 +62,59 @@ logstr(int level, struct sockaddr_in *sin, const char *fmt, ...)
 }
 
 void
-client(struct sockaddr_in *sin, const char *file, int jobs)
+client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec)
 {
+	ssize_t		sum = 0;
+	ssize_t		val;
+	socklen_t	slen = sizeof *sin;
 	int		s;
 	int		fd;
+	int		p[2];
+	int		child[jobs];
 
  next:
+	if (pipe(p) == -1)
+		err(1, "pipe");
+
 	switch (fork()) {
 	case -1:
 		err(1, "fork");
 	case 0:
+		if (close(p[READ]) == -1)
+			err(1, "close pipe");
+
 		break;
 	default:
-		if (--jobs)
+		/*
+		 * parent
+		 */
+
+		if (close(p[WRITE]) == -1)
+			err(1, "close pipe");
+
+		child[--jobs] = p[READ];
+
+		if (jobs)
 			goto next;
-	};
+
+
+		for (size_t i = 0; i < nitems(child); i++) {
+			if (read(child[i], &val, sizeof val) == -1)
+				err(1, "read pipe");
+			sum += val;
+
+			if (wait(NULL) == -1)
+				err(1, "wait");
+		}
+
+		printf("%zd bytes/s\n", sum / sec);
+
+		return;
+	}
+
+	/*
+	 * child
+	 */
 
 	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 		err(1, "socket");
@@ -70,32 +122,52 @@ client(struct sockaddr_in *sin, const char *file, int jobs)
 	if (connect(s, (struct sockaddr *)sin, sizeof *sin) == -1)
 		err(1, "connect");
 
+	if (getsockname(s, (struct sockaddr *)sin, &slen) == -1)
+		err(1, "getsockname");
+
 	logstr(1, sin, "connected");
 
 	if ((fd = open(file, O_RDONLY)) == -1)
 		err(1, "open: %s", file);
 
-	for (;;) {
+	if (signal(SIGALRM, sighandler) == SIG_ERR)
+		err(1, "signal");
+	logstr(1, sin, "alarm in %u sec", sec);
+	if (alarm(sec) != 0)
+		err(1, "alarm");
+
+	while (loop) {
 		char buf[BUFSIZ];
 		ssize_t size;
 
 		if ((size = read(fd, buf, sizeof buf)) == -1)
 			err(1, "read");
+		logstr(2, sin, "read %llu bytes", size);
 
 		if (size == 0)
 			break;
 
+		sum += size;
 		logstr(2, sin, "read %zd bytes", size);
 
 		if (write(s, buf, size) == -1)
 			err(1, "write");
+		logstr(2, sin, "write %llu bytes", size);
 	}
 
+	logstr(2, sin, "loop exit");
+
+	if (write(p[1], &sum, sizeof sum) == -1)
+		err(1, "write pipe");
+
+	if (close(p[1]) == -1)
+		err(1, "close pipe");
+
 	if (close(fd) == -1)
-		err(1, "close");
+		err(1, "close file");
 
 	if (close(s) == -1)
-		err(1, "close");
+		err(1, "close socket");
 
 	logstr(1, sin, "closed");
 }
@@ -174,6 +246,7 @@ main(int argc, char *argv[])
 	char			*addr = "127.0.0.1";
 	char			*port = "12345";
 	char			*file = "/dev/zero";
+	unsigned int		 sec = 5;
 	int			 ch;
 	int			 jobs = 1;
 	bool			 sflag = false;
@@ -219,7 +292,7 @@ main(int argc, char *argv[])
 	if (sflag)
 		server(&sin, file);
 	else
-		client(&sin, file, jobs);
+		client(&sin, file, jobs, sec);
 
 	return 0;
 }

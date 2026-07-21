@@ -61,7 +61,7 @@ logstr(int level, struct sockaddr_in *sin, const char *fmt, ...)
 	putchar('\n');
 }
 
-void
+ssize_t
 client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec)
 {
 	ssize_t		sum = 0;
@@ -107,9 +107,7 @@ client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec)
 				err(1, "wait");
 		}
 
-		printf("%zd bytes/s\n", sum / sec);
-
-		return;
+		return sum;
 	}
 
 	/*
@@ -170,6 +168,8 @@ client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec)
 		err(1, "close socket");
 
 	logstr(1, sin, "closed");
+
+	exit(0);
 }
 
 void
@@ -235,7 +235,7 @@ server(struct sockaddr_in *sin, const char *file)
 void
 usage(void)
 {
-	fputs("net2disk [-shv] [-j jobs] [host] [port]\n", stderr);
+	fputs("net2disk [-bshv] [-j jobs] [host] [port]\n", stderr);
 	exit(1);
 }
 
@@ -250,9 +250,13 @@ main(int argc, char *argv[])
 	int			 ch;
 	int			 jobs = 1;
 	bool			 sflag = false;
+	bool			 bflag = false;
 
-	while ((ch = getopt(argc, argv, "j:svh")) != -1) {
+	while ((ch = getopt(argc, argv, "bj:svh")) != -1) {
 		switch (ch) {
+		case 'b':
+			bflag = true;
+			break;
 		case 'j':
 			jobs = atoi(optarg);
 			if (jobs == 0)
@@ -291,8 +295,14 @@ main(int argc, char *argv[])
 
 	if (sflag)
 		server(&sin, file);
-	else
-		client(&sin, file, jobs, sec);
+	else {
+		ssize_t sum = client(&sin, file, jobs, sec);
+
+		if (bflag)
+			sum *= 8;
+
+		printf("%zd %s/s\n", sum / sec, bflag ? "bits" : "Bytes");
+	}
 
 	return 0;
 }

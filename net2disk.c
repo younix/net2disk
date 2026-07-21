@@ -299,8 +299,8 @@ main(int argc, char *argv[])
 	if (sflag)
 		server(&sin, file);
 	else {
-		ssize_t	factor = 1024;
-		ssize_t	sum = client(&sin, file, jobs, sec);
+		ssize_t	 factor = 1024;
+		ssize_t	 sum = client(&sin, file, jobs, sec);
 		char	*unit = "";
 
 		if (bflag) {
@@ -325,7 +325,8 @@ main(int argc, char *argv[])
 			}
 		}
 
-		printf("%zd %s%s/s\n", sum / sec, unit, bflag ? "bits" : "Bytes");
+		printf("%zd %s%s/s\n", sum / sec, unit,
+		    bflag ? "bits" : "Bytes");
 	}
 
 	return 0;

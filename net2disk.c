@@ -312,15 +312,15 @@ main(int argc, char *argv[])
 			sum /= factor;
 
 			if (strcmp(unit, "") == 0)
-				unit = "K";
-			else if (strcmp(unit, "K") == 0)
-				unit = "M";
-			else if (strcmp(unit, "M") == 0)
-				unit = "G";
-			else if (strcmp(unit, "G") == 0)
-				unit = "T";
-			else if (strcmp(unit, "T") == 0) {
-				unit = "P";
+				unit = bflag ? "K" : "Ki";
+			else if (strcmp(unit, bflag ? "K" : "Ki") == 0)
+				unit = bflag ? "M" : "Mi";
+			else if (strcmp(unit, bflag ? "M" : "Mi") == 0)
+				unit = bflag ? "G" : "Gi";
+			else if (strcmp(unit, bflag ? "G" : "Gi") == 0)
+				unit = bflag ? "T" : "Ti";
+			else if (strcmp(unit, bflag ? "T" : "Ti") == 0) {
+				unit = bflag ? "P" : "Pi";
 				break;
 			}
 		}

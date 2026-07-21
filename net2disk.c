@@ -48,10 +48,21 @@ logstr(int level, struct sockaddr_in *sin, const char *fmt, ...)
 }
 
 void
-client(struct sockaddr_in *sin, const char *file)
+client(struct sockaddr_in *sin, const char *file, int jobs)
 {
 	int		s;
 	int		fd;
+
+ next:
+	switch (fork()) {
+	case -1:
+		err(1, "fork");
+	case 0:
+		break;
+	default:
+		if (--jobs)
+			goto next;
+	};
 
 	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 		err(1, "socket");
@@ -106,8 +117,18 @@ server(struct sockaddr_in *sin, const char *file)
 	if (listen(s, 10) == -1)
 		err(1, "listen");
 
+ next:
 	if ((c = accept(s, (struct sockaddr *)sin, &slen)) == -1)
 		err(1, "accept");
+
+	switch (fork()) {
+	case -1:
+		err(1, "fork");
+	case 0:
+		break;
+	default:
+		goto next;
+	};
 
 	logstr(1, sin, "connected");
 
@@ -142,7 +163,7 @@ server(struct sockaddr_in *sin, const char *file)
 void
 usage(void)
 {
-	fputs("net2disk [-shv] [host] [port]\n", stderr);
+	fputs("net2disk [-shv] [-j jobs] [host] [port]\n", stderr);
 	exit(1);
 }
 
@@ -154,10 +175,16 @@ main(int argc, char *argv[])
 	char			*port = "12345";
 	char			*file = "/dev/zero";
 	int			 ch;
+	int			 jobs = 1;
 	bool			 sflag = false;
 
-	while ((ch = getopt(argc, argv, "svh")) != -1) {
+	while ((ch = getopt(argc, argv, "j:svh")) != -1) {
 		switch (ch) {
+		case 'j':
+			jobs = atoi(optarg);
+			if (jobs == 0)
+				err(1, "invalid jobs: %s", optarg);
+			break;
 		case 's':
 			addr = "0.0.0.0";
 			file = "/dev/null";
@@ -192,7 +219,7 @@ main(int argc, char *argv[])
 	if (sflag)
 		server(&sin, file);
 	else
-		client(&sin, file);
+		client(&sin, file, jobs);
 
 	return 0;
 }

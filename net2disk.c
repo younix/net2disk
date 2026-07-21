@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 
 #include <err.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,8 +13,23 @@
 void
 usage(void)
 {
-	fputs("net2disk [-h] [host] [port]\n", stderr);
+	fputs("net2disk [-sh] [host] [port]\n", stderr);
 	exit(1);
+}
+
+void
+server(struct sockaddr_in *sin)
+{
+	int s;
+
+	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+		err(1, "socket");
+
+	if (bind(s, (struct sockaddr *)sin, sizeof *sin) == -1)
+		err(1, "bind");
+
+	if (listen(s, 10) == -1)
+		err(1, "listen");
 }
 
 int
@@ -23,11 +39,14 @@ main(int argc, char *argv[])
 	char			*addr = "127.0.0.1";
 	char			*port = "12345";
 	int			 ch;
+	bool			 sflag = false;
 
-	while ((ch = getopt(argc, argv, "hs")) != -1) {
+	while ((ch = getopt(argc, argv, "sh")) != -1) {
 		switch (ch) {
 		case 's':
 			addr = "0.0.0.0";
+			sflag = true;
+			break;
 		case 'h':
 		default:
 			usage();
@@ -50,6 +69,9 @@ main(int argc, char *argv[])
 	sin.sin_addr.s_addr = inet_addr(addr);
 	if (sin.sin_addr.s_addr == 0 && strcmp(addr, "0.0.0.0") != 0)
 		err(1, "invalid host %s", addr);
+
+	if (sflag)
+		server(&sin);
 
 	return 0;
 }

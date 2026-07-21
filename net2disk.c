@@ -20,7 +20,9 @@ usage(void)
 void
 server(struct sockaddr_in *sin)
 {
-	int s;
+	socklen_t	slen = sizeof *sin;
+	int		s;
+	int		c;
 
 	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 		err(1, "socket");
@@ -30,6 +32,29 @@ server(struct sockaddr_in *sin)
 
 	if (listen(s, 10) == -1)
 		err(1, "listen");
+
+	if ((c = accept(s, (struct sockaddr *)sin, &slen)) == -1)
+		err(1, "accept");
+
+	printf("%s:%hu connected\n", inet_ntoa(sin->sin_addr),
+	    ntohs(sin->sin_port));
+
+	for (;;) {
+		char buf[BUFSIZ];
+		ssize_t size;
+
+		if ((size = read(c, buf, sizeof buf)) == -1)
+			err(1, "read");
+
+		if (size == 0) {
+			printf("%s:%hu closed\n", inet_ntoa(sin->sin_addr),
+			    ntohs(sin->sin_port));
+			break;
+		}
+
+		printf("%s:%hu read %zd bytes\n", inet_ntoa(sin->sin_addr),
+		    ntohs(sin->sin_port), size);
+	}
 }
 
 int

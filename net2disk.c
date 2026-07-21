@@ -16,12 +16,15 @@
 
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
 #include <err.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -175,10 +178,12 @@ client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec)
 void
 server(struct sockaddr_in *sin, const char *file)
 {
+	char		path[PATH_MAX];
 	socklen_t	slen = sizeof *sin;
 	int		s;
 	int		c;
 	int		fd;
+	int		flags = O_WRONLY;
 
 	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 		err(1, "socket");
@@ -204,8 +209,19 @@ server(struct sockaddr_in *sin, const char *file)
 
 	logstr(1, sin, "connected");
 
-	if ((fd = open(file, O_WRONLY)) == -1)
-		err(1, "open: %s", file);
+ again:
+	if ((fd = open(file, flags, S_IRUSR|S_IWUSR)) == -1) {
+		if (errno == EISDIR) {
+			snprintf(path, sizeof path, "%s/%s:%hu", file,
+			    inet_ntoa(sin->sin_addr), ntohs(sin->sin_port));
+			flags |= O_CREAT;
+			file = path;
+			logstr(1, sin, "create file");
+
+			goto again;
+		} else
+			err(1, "open: %s", file);
+	}
 
 	for (;;) {
 		char buf[BUFSIZ];
@@ -223,6 +239,13 @@ server(struct sockaddr_in *sin, const char *file)
 			err(1, "write");
 	}
 
+	if (flags | O_CREAT) {
+		logstr(1, sin, "unlink file");
+
+		if (unlink(file) == -1)
+			err(1, "unlink: %s", file);
+	}
+
 	if (close(fd) == -1)
 		err(1, "close");
 
@@ -235,7 +258,8 @@ server(struct sockaddr_in *sin, const char *file)
 void
 usage(void)
 {
-	fputs("net2disk [-bhsv] [-j jobs] [-t sec] [host] [port]\n", stderr);
+	fputs("net2disk [-bhsv] [-f file] [-j jobs] [-t sec] [host] [port]\n",
+	    stderr);
 	exit(1);
 }
 
@@ -253,10 +277,13 @@ main(int argc, char *argv[])
 	bool			 bflag = false;
 	bool			 hflag = false;
 
-	while ((ch = getopt(argc, argv, "bhj:st:v")) != -1) {
+	while ((ch = getopt(argc, argv, "bf:hj:st:v")) != -1) {
 		switch (ch) {
 		case 'b':
 			bflag = true;
+			break;
+		case 'f':
+			file = optarg;
 			break;
 		case 'h':
 			hflag = true;
@@ -268,7 +295,8 @@ main(int argc, char *argv[])
 			break;
 		case 's':
 			addr = "0.0.0.0";
-			file = "/dev/null";
+			if (strcmp(file, "/dev/zero") == 0)
+				file = "/dev/null";
 			sflag = true;
 			break;
 		case 't':

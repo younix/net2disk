@@ -65,7 +65,8 @@ logstr(int level, struct sockaddr_in *sin, const char *fmt, ...)
 }
 
 ssize_t
-client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec)
+client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec,
+    size_t bufsiz)
 {
 	ssize_t		sum = 0;
 	ssize_t		val;
@@ -138,7 +139,7 @@ client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec)
 		err(1, "alarm");
 
 	while (loop) {
-		char buf[BUFSIZ];
+		char buf[bufsiz];
 		ssize_t size;
 
 		if ((size = read(fd, buf, sizeof buf)) == -1)
@@ -176,7 +177,7 @@ client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec)
 }
 
 void
-server(struct sockaddr_in *sin, const char *file)
+server(struct sockaddr_in *sin, const char *file, size_t bufsiz)
 {
 	char		path[PATH_MAX];
 	socklen_t	slen = sizeof *sin;
@@ -224,7 +225,7 @@ server(struct sockaddr_in *sin, const char *file)
 	}
 
 	for (;;) {
-		char buf[BUFSIZ];
+		char buf[bufsiz];
 		ssize_t size;
 
 		if ((size = read(c, buf, sizeof buf)) == -1)
@@ -258,7 +259,7 @@ server(struct sockaddr_in *sin, const char *file)
 void
 usage(void)
 {
-	fputs("net2disk [-bhsv] [-f file] [-j jobs] [-t sec] [host] [port]\n",
+	fputs("net2disk [-bhsv] [-B bufsiz] [-f file] [-j jobs] [-t sec] [host] [port]\n",
 	    stderr);
 	exit(1);
 }
@@ -270,6 +271,7 @@ main(int argc, char *argv[])
 	char			*addr = "127.0.0.1";
 	char			*port = "12345";
 	char			*file = "/dev/zero";
+	size_t			 bufsiz = BUFSIZ;
 	unsigned int		 sec = 5;
 	int			 ch;
 	int			 jobs = 1;
@@ -277,10 +279,15 @@ main(int argc, char *argv[])
 	bool			 bflag = false;
 	bool			 hflag = false;
 
-	while ((ch = getopt(argc, argv, "bf:hj:st:v")) != -1) {
+	while ((ch = getopt(argc, argv, "bB:f:hj:st:v")) != -1) {
 		switch (ch) {
 		case 'b':
 			bflag = true;
+			break;
+		case 'B':
+			bufsiz = atoi(optarg);
+			if (bufsiz == 0)
+				err(1, "invalid bufsiz: %s", optarg);
 			break;
 		case 'f':
 			file = optarg;
@@ -330,10 +337,10 @@ main(int argc, char *argv[])
 		err(1, "invalid host %s", addr);
 
 	if (sflag)
-		server(&sin, file);
+		server(&sin, file, bufsiz);
 	else {
 		ssize_t	 factor = 1024;
-		ssize_t	 sum = client(&sin, file, jobs, sec);
+		ssize_t	 sum = client(&sin, file, jobs, sec, bufsiz);
 		char	*unit = "";
 
 		if (bflag) {

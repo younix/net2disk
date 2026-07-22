@@ -66,7 +66,7 @@ logstr(int level, struct sockaddr_in *sin, const char *fmt, ...)
 
 ssize_t
 client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec,
-    size_t bufsiz)
+    size_t bufsiz, int socksiz)
 {
 	ssize_t		sum = 0;
 	ssize_t		val;
@@ -120,6 +120,10 @@ client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec,
 
 	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 		err(1, "socket");
+
+	if (socksiz && setsockopt(s, SOL_SOCKET, SO_SNDBUF, &socksiz,
+	    sizeof socksiz) == -1)
+		err(1, "setsockopt");
 
 	if (connect(s, (struct sockaddr *)sin, sizeof *sin) == -1)
 		err(1, "connect");
@@ -177,7 +181,7 @@ client(struct sockaddr_in *sin, const char *file, int jobs, unsigned int sec,
 }
 
 void
-server(struct sockaddr_in *sin, const char *file, size_t bufsiz)
+server(struct sockaddr_in *sin, const char *file, size_t bufsiz, int socksiz)
 {
 	char		path[PATH_MAX];
 	socklen_t	slen = sizeof *sin;
@@ -198,6 +202,10 @@ server(struct sockaddr_in *sin, const char *file, size_t bufsiz)
  next:
 	if ((c = accept(s, (struct sockaddr *)sin, &slen)) == -1)
 		err(1, "accept");
+
+	if (socksiz && setsockopt(s, SOL_SOCKET, SO_RCVBUF, &socksiz,
+	    sizeof socksiz) == -1)
+		err(1, "setsockopt");
 
 	switch (fork()) {
 	case -1:
@@ -259,7 +267,9 @@ server(struct sockaddr_in *sin, const char *file, size_t bufsiz)
 void
 usage(void)
 {
-	fputs("net2disk [-bhsv] [-B bufsiz] [-f file] [-j jobs] [-t sec] [host] [port]\n",
+	fputs("net2disk [-bhsv] [-B bufsiz] [-f file] [-j jobs] [-S socksiz]"
+	    " [-t sec]\n"
+	    "         [host] [port]\n",
 	    stderr);
 	exit(1);
 }
@@ -272,6 +282,7 @@ main(int argc, char *argv[])
 	char			*port = "12345";
 	char			*file = "/dev/zero";
 	size_t			 bufsiz = BUFSIZ;
+	int			 socksiz = 0;
 	unsigned int		 sec = 5;
 	int			 ch;
 	int			 jobs = 1;
@@ -279,7 +290,7 @@ main(int argc, char *argv[])
 	bool			 bflag = false;
 	bool			 hflag = false;
 
-	while ((ch = getopt(argc, argv, "bB:f:hj:st:v")) != -1) {
+	while ((ch = getopt(argc, argv, "bB:f:hj:sS:t:v")) != -1) {
 		switch (ch) {
 		case 'b':
 			bflag = true;
@@ -305,6 +316,11 @@ main(int argc, char *argv[])
 			if (strcmp(file, "/dev/zero") == 0)
 				file = "/dev/null";
 			sflag = true;
+			break;
+		case 'S':
+			socksiz = atoi(optarg);
+			if (socksiz == 0)
+				err(1, "invalid socksiz: %s", optarg);
 			break;
 		case 't':
 			sec = atoi(optarg);
@@ -337,10 +353,10 @@ main(int argc, char *argv[])
 		err(1, "invalid host %s", addr);
 
 	if (sflag)
-		server(&sin, file, bufsiz);
+		server(&sin, file, bufsiz, socksiz);
 	else {
 		ssize_t	 factor = 1024;
-		ssize_t	 sum = client(&sin, file, jobs, sec, bufsiz);
+		ssize_t	 sum = client(&sin, file, jobs, sec, bufsiz, socksiz);
 		char	*unit = "";
 
 		if (bflag) {
